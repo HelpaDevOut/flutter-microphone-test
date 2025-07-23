@@ -1,9 +1,10 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_sound/flutter_sound.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 void main() => runApp(const MicTestApp());
 
@@ -23,8 +24,8 @@ class MicPermissionHome extends StatefulWidget {
 
 class _MicPermissionHomeState extends State<MicPermissionHome> {
   final _recorder = FlutterSoundRecorder();
-  final _player   = FlutterSoundPlayer();
-  String _status  = 'Idle';
+  final _player = FlutterSoundPlayer();
+  String _status = 'Idle';
   String? _filePath;
 
   @override
@@ -48,12 +49,45 @@ class _MicPermissionHomeState extends State<MicPermissionHome> {
   Future<void> _requestAndRecord() async {
     // 1) Permission
     var status = await Permission.microphone.status;
-    if (!status.isGranted) {
-      status = await Permission.microphone.request();
-    }
-    if (!status.isGranted) {
-      setState(() => _status = 'Mic permission denied');
+    // if (!status.isGranted) {
+    //   status = await Permission.microphone.request();
+    // }
+    // if (!status.isGranted) {
+    //   setState(() => _status = 'Mic permission denied');
+    //   return;
+    // }
+    if (status.isGranted) {
+      // Mic permission granted
+      log("Permission granted");
+    } else if (status.isDenied) {
+      // Not allowed yet (request)
+      log("Permission denied, request...");
+      final result = await Permission.microphone.request();
+
+      if (result.isGranted) {
+        log("Granted after request");
+      } else if (result.isPermanentlyDenied) {
+        // User pressed “Don’t ask again”
+        log("Permanently denied, open settings");
+        setState(() => _status = 'Permanently denied, open settings');
+        openAppSettings();
+        return;
+      }
+    } else if (status.isPermanentlyDenied) {
+      log("Permanently denied, open settings");
+      setState(() => _status = 'Permanently denied, open settings');
+      openAppSettings();
       return;
+    } else {
+      log("Permission undetermined, request...");
+      final result = await Permission.microphone.request();
+      if (result.isGranted) {
+        log("Granted after undetermined");
+      } else {
+        log("User denied from undetermined");
+        setState(() => _status = 'User denied from undetermined');
+        return;
+      }
     }
 
     // 2) Start recording
@@ -64,7 +98,7 @@ class _MicPermissionHomeState extends State<MicPermissionHome> {
       codec: Codec.pcm16WAV,
     );
     setState(() => _status = 'Recording...');
-    
+
     // Optional: stop after 30s
     Future.delayed(const Duration(seconds: 30), () async {
       if (_recorder.isRecording) {
